@@ -134,5 +134,129 @@ openssl dgst -sha256 -verify /app/data/client_public.pem -signature /app/data/ch
 
 We've completed the public-key based authentication flow.
 
+# Task 2: Encrypting large message 
+Create a text file at least 56 bytes. <br>
+**Question 1**:
+Encrypt the file with aes-256 cipher in CFB and OFB modes. How do you evaluate both cipher as far as error propagation and adjacent plaintext blocks are concerned. <br>
+**Answer 1**:
+## 1. Create the message file
+*We'll reuse the client container for this lab. First, we'll create a new folder and create the message with at least 56 bytes:*<br>
 
+```sh
+mkdir task2
+cd task 2
+echo "This is a sample text file with more than fifty-six bytes of content for task 2 question 1" > message.txt
+```
 
+<img width="500" alt="Screenshot" src="./image/g1.png"><br>
+
+We can verify the message size with the following command:
+
+```sh
+wc -c message.txt
+```
+
+<img width="500" alt="Screenshot" src="./image/g2.png"><br>
+
+## 2. Create a key and IV
+
+```sh
+openssl rand -hex 32 > key.txt
+openssl rand -hex 16 > iv.txt
+```
+
+<img width="500" alt="Screenshot" src="./image/g3.png"><br>
+
+The first command creates a key text file that has 32 bytes - 256 bits.
+The second command creates an IV text file that has 16 bytes - 128 bits.
+
+## 3. Encrypt the file in CFB mode
+*We'll encrypt the message using aes 256 in CFB mode with the generated key and iv:*<br>
+
+```sh
+openssl enc -aes-256-cfb -in message.txt -out message_cfb.enc -K $(cat key.txt) -iv $(cat iv.txt)
+```
+
+<img width="500" alt="Screenshot" src="./image/g4.png"><br>
+
+## 4. Decrypt the CFB encrypted message
+*We run:*<br>
+```sh
+openssl enc -d -aes-256-cfb -in message_cfb.enc -out message_cfb_dec.txt -K $(cat key.txt) -iv $(cat iv.txt)
+```
+
+<img width="500" alt="Screenshot" src="./image/g5.png"><br>
+
+## 5. Encrypt the file in OFB mode
+*We'll encrypt the message using aes 256 in OFB mode with the generated key and iv:*<br>
+
+```sh
+openssl enc -aes-256-ofb -in message.txt -out message_ofb.enc -K $(cat key.txt) -iv $(cat iv.txt)
+```
+
+<img width="500" alt="Screenshot" src="./image/g6.png"><br>
+
+## 6. Decrypt the OFB encrypted message
+*We run:*<br>
+```sh
+openssl enc -d -aes-256-ofb -in message_ofb.enc -out message_ofb_dec.txt -K $(cat key.txt) -iv $(cat iv.txt)
+```
+
+<img width="500" alt="Screenshot" src="./image/g7.png"><br>
+
+## 7. Error propagation of both ciphers
+*In CFB mode, an error in the ciphertext affects the current block and propagates into subsequent blocks during decryption. <br><br>
+In OFB mode, an error in the ciphertext affects only the corresponding block during decryption.*<br><br>
+
+**Question 2**:
+Modify the 8th byte of encrypted file in both modes (this emulates corrupted ciphertext).
+Decrypt corrupted file, watch the result and give your comment on Chaining dependencies and Error propagation criteria.<br>
+**Answer 2**:
+## 1. Corrupt the CFB Ciphertext
+*We run:*<br>
+
+```sh
+xxd message_cfb.enc > message_cfb.hex
+xxd -r message_cfb.hex > message_cfb_corrupted.enc
+```
+
+We use the first command to convert the file to heximal and the second command the convert it back after we have modified the 8th bit.
+
+<img width="500" alt="Screenshot" src="./image/b1.png"><br>
+In the above pic, the 8th bit is 96. We modify it to ff.
+
+## 2. Decrypt the Corrupted CFB File
+*We run:*<br>
+
+```sh
+openssl enc -d -aes-256-cfb -in message_cfb_corrupted.enc -out message_cfb_corrupted_dec.txt -K $(cat key.txt) -iv $(cat iv.txt)
+```
+
+<img width="500" alt="Screenshot" src="./image/b2.png"><br>
+The above shows the decrypted corrupted file using cfb and the original message.
+
+## 3. Corrupt the OFB Ciphertext
+*We run:*<br>
+
+```sh
+xxd message_ofb.enc > message_ofb.hex
+xxd -r message_ofb.hex > message_ofb_corrupted.enc
+```
+
+<img width="500" alt="Screenshot" src="./image/b3.png"><br>
+We repeat the step 1 but on the OFB file. Here we changed the 8th byte 96 to a1.
+
+## 4. Decrypt the Corrupted OFB File
+*We run:*<br>
+
+```sh
+openssl enc -d -aes-256-ofb -in message_ofb_corrupted.enc -out message_ofb_corrupted_dec.txt -K $(cat key.txt) -iv $(cat iv.txt)
+```
+
+<img width="500" alt="Screenshot" src="./image/b4.png"><br>
+The above shows the decrypted corrupted file using ofb and the original message.
+
+## 5. Comments of CFB and OFB error propogation
+In the cfb results: starting from the 8th byte, the errors appear and persist for about 16 characters. This is because CFB uses feedback chaining, where each cipher bock affects the next cipher block. This dependency causes the errors at one block to affect the next one. Because we use AES, each block has 16 bytes, the errors stop after 16 characters.<br><br>
+In the ofb results: the error happens on the 8th byte only and the remaining text is decrypted normally. This is because ofb uses keystream independent of the plaintext. The keystream XORs
+with the original plaintext so the corruption doesn't spread.
