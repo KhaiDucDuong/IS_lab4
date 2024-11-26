@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: ./
+    container_name: openssl-server
+    volumes:
+      - ./server/data:/app/data
+    networks:
+      - openssl-network
+    tty: true
+
+  client:
+    build:
+      context: ./
+    container_name: openssl-client
+    volumes:
+      - ./client/data:/app/data
+    depends_on:
+      - server
+    networks:
+      - openssl-network
+    tty: true
+
+networks:
+  openssl-network:
+    driver: bridge
